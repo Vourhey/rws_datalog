@@ -6,7 +6,7 @@
 
 mkRosPackage rec {
   name = "${pname}-${version}";
-  pname = "rws_datalog";
+  pname = "rws_agent";
   version = "0.1.0";
 
   src = ./.;
@@ -15,6 +15,7 @@ mkRosPackage rec {
     robonomics_comm-nightly
     sentry-sdk
     ipfshttpclient
+    pinatapy
   ];
 
   meta = with stdenv.lib; {

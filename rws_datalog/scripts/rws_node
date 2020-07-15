@@ -1,0 +1,170 @@
+#!/usr/bin/env python3
+import rospy
+import copy
+import json
+import time
+
+import subprocess
+from threading import Timer
+
+from tempfile import NamedTemporaryFile
+from pinatapy import PinataPy
+
+from rosgraph_msgs.msg import Log
+from rws_msgs.msg import Entry
+
+
+class RWSNode:
+    def __init__(self):
+        rospy.init_node("rws_node")
+
+        rospy.Subscriber("/entry", Entry, self.add_entry)
+        rospy.Subscriber("/rosout", Log, self.add_log)
+
+        pinata_api_key = rospy.get_param("~pinata_api_key")
+        pinata_secret_api_key = rospy.get_param("~pinata_secret_api_key")
+
+        self.pinata = PinataPy(pinata_api_key, pinata_secret_api_key)
+
+        self.robonomics_path = rospy.get_param("~robonomics_path")
+        self.suri = rospy.get_param("~suri")
+        self.remote = rospy.get_param("~robonomics_remote")
+        self.interval = 30
+
+        self.todatalog = {
+            "actions": [],
+            "logs": []
+        }
+
+        self.emptyentry = {
+            "action": "",
+            "data": "",
+            "success": False,
+            "timestamp": 0
+        }
+
+        self.emptylog = {
+            "header": {
+                "seq": 0,
+                "stamp": {
+                    "secs": 0,
+                    "nsecs": 0
+                },
+                "frame_id": ''
+            },
+            "level": 0,
+            "name": "",
+            "msg": "",
+            "file": "",
+            "function": "",
+            "line": 0
+        }
+
+
+    def add_entry(self, entry: Entry):
+        row = copy.deepcopy(self.emptyentry)
+        row["action"] = entry.action
+        row["success"] = entry.success
+        row["timestamp"] = int(time.time())
+
+        ipfshash = self.publish_file_to_ipfs(entry.data)
+        row["data"] = ipfshash
+        #self.pin_to_pinata(ipfshash)
+
+        self.todatalog["actions"].append(row)
+
+    def publish_file_to_ipfs(self, path: str) -> str:
+        res = self.pinata.pin_file_to_ipfs(path)
+        rospy.loginfo(res)
+        return res["IpfsHash"]
+
+    def add_log(self, log: Log):
+        if log.name != "/rws_datalog/agent":
+            logrow = copy.deepcopy(self.emptylog)
+            logrow["header"]["seq"] = log.header.seq
+            logrow["header"]["stamp"]["secs"] = log.header.stamp.secs
+            logrow["header"]["stamp"]["nsecs"] = log.header.stamp.nsecs
+            logrow["header"]["frame_id"] = log.header.frame_id
+            logrow["level"] = log.level
+            logrow["name"] = log.name
+            logrow["msg"] = log.msg
+            logrow["file"] = log.file
+            logrow["function"] = log.function
+            logrow["line"] = log.line
+
+            self.todatalog["logs"].append(logrow)
+
+    def save_json(self, data: dict) -> str:
+        content = json.dumps(data)
+        f = NamedTemporaryFile(mode="w", delete=False)
+        f.write(content)
+        f.close()
+
+        return f.name
+
+    def spin(self):
+        def call_datalog():
+            rospy.loginfo("Publish to datalog")
+            if len(self.todatalog["actions"]) > 0 or len(self.todatalog["logs"]) > 0:
+                rospy.loginfo(self.todatalog)
+                path = self.save_json(self.todatalog)
+                ipfshash = self.publish_file_to_ipfs(path)
+
+                prog_path = [self.robonomics_path, "io", "write", "datalog",
+                     "-s", self.suri, "--remote", self.remote]
+                output = subprocess.run(prog_path, stdout=subprocess.PIPE, input=ipfshash.encode(),
+                           stderr=subprocess.PIPE)
+
+                rospy.loginfo(output.stderr)
+                rospy.loginfo(output)
+            else:
+                rospy.loginfo("Nothing to publish")
+
+            self.todatalog = {
+                "actions": [],
+                "logs": []
+            }
+
+            Timer(self.interval, call_datalog).start()
+
+        call_datalog()
+        rospy.spin()
+
+
+if __name__ == "__main__":
+    RWSNode().spin()
+
+
+"""
+{
+  "actions": [
+    {
+      "action": "action1",
+      "data": Qm...,
+      "success": true|false,
+      "timestamp": UNIXTIMESTAMP
+    },
+    ...
+  ],
+  "log": [
+    {
+      "header": {
+        "seq": 316623,
+        "stamp": {
+          "secs": 1594819798,
+          "nsecs": 780485868
+        },
+        "frame_id": ''
+      },
+      "level": 2,
+      "name": "/connectivity/worker",
+      "msg": "DatalogFeeder:",
+      "file": "datalog_feeder.py",
+      "function": "DatalogFeeder.feed",
+      "line": 73
+    },
+    ...
+  ]
+}
+"""
+

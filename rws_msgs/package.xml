@@ -1,0 +1,15 @@
+<?xml version="1.0"?>
+<package format="2">
+  <name>rws_msgs</name>
+  <version>0.1.0</version>
+  <description>RWS Agent messages</description>
+  <author email="vadim.razorq@gmail.com">Vadim Manaenko</author>
+  <maintainer email="vadim.razorq@aira.life">Vadim Manaenko</maintainer>
+  <license>BSD3</license>
+
+  <buildtool_depend>catkin</buildtool_depend>
+  <build_depend>message_generation</build_depend>
+
+  <export>
+  </export>
+</package>

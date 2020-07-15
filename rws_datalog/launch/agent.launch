@@ -1,0 +1,15 @@
+<launch>
+    <arg name="pinata_api_key" default="" />
+    <arg name="pinata_secret_api_key" default="" />
+    <arg name="robonomics_path" default="" />
+    <arg name="suri" default="" />
+    <arg name="robonomics_remote" default="wss://substrate.ipci.io" />
+    <node ns="rws_datalog" name="agent" pkg="rws_datalog" type="rws_node" output="screen" respawn="true">
+        <param name="pinata_api_key" value="$(arg pinata_api_key)" />
+        <param name="pinata_secret_api_key" value="$(arg pinata_secret_api_key)" />
+
+        <param name="robonomics_path" value="$(arg robonomics_path)" />
+        <param name="suri" value="$(arg suri)" />
+        <param name="robonomics_remote" value="$(arg robonomics_remote)" />
+    </node>
+</launch>

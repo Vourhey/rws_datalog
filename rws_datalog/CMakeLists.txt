@@ -3,9 +3,10 @@ project(rws_datalog)
 
 find_package(catkin REQUIRED COMPONENTS
   rospy
+  rws_msgs
 )
 
-catkin_python_setup()
+#catkin_python_setup()
 
 catkin_package()
 
