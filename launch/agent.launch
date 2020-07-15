@@ -1,0 +1,4 @@
+<launch>
+    <node ns="rws_datalog" name="agent" pkg="rws_datalog" type="rws_node" output="screen" respawn="true">
+    </node>
+</launch>
