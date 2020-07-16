@@ -67,9 +67,9 @@ class RWSNode:
         row["success"] = entry.success
         row["timestamp"] = int(time.time())
 
-        ipfshash = self.publish_file_to_ipfs(entry.data)
-        row["data"] = ipfshash
-        #self.pin_to_pinata(ipfshash)
+        if entry.data:
+            ipfshash = self.publish_file_to_ipfs(entry.data)
+            row["data"] = ipfshash
 
         self.todatalog["actions"].append(row)
 

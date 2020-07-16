@@ -1,0 +1,6 @@
+<launch>
+    <arg name="endpoint" default="http://192.168.1.100:8080/" />
+    <node ns="photographer" name="agent" pkg="photographer_agent" type="photographer_node" output="screen" respawn="true">
+        <param name="endpoint" value="$(arg endpoint)" />
+    </node>
+</launch>

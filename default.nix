@@ -15,6 +15,7 @@ mkRosPackage rec {
     robonomics_comm-nightly
     sentry-sdk
     ipfshttpclient
+    requests
     pinatapy
   ];
 
