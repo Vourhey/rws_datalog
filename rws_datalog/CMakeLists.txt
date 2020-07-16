@@ -24,3 +24,10 @@ install(
         ${CATKIN_PACKAGE_SHARE_DESTINATION}/launch
 )
 
+install(
+    FILES
+        config/default.yaml
+    DESTINATION
+        ${CATKIN_PACKAGE_SHARE_DESTINATION}/config
+)
+
