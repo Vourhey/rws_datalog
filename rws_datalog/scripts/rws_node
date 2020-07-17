@@ -3,6 +3,9 @@ import rospy
 import copy
 import json
 import time
+import yaml
+import requests
+import ipfshttpclient
 
 import subprocess
 from threading import Timer
@@ -21,15 +24,18 @@ class RWSNode:
         rospy.Subscriber("/entry", Entry, self.add_entry)
         rospy.Subscriber("/rosout", Log, self.add_log)
 
-        pinata_api_key = rospy.get_param("~pinata_api_key")
-        pinata_secret_api_key = rospy.get_param("~pinata_secret_api_key")
+        with open(rospy.get_param("~config")) as f:
+            self.config = yaml.load(f.read(), Loader=yaml.FullLoader)
+
+        pinata_api_key = self.config["pinata_api_key"]
+        pinata_secret_api_key = self.config["pinata_secret_api_key"]
 
         self.pinata = PinataPy(pinata_api_key, pinata_secret_api_key)
 
-        self.robonomics_path = rospy.get_param("~robonomics_path")
-        self.suri = rospy.get_param("~suri")
-        self.remote = rospy.get_param("~robonomics_remote")
-        self.interval = 30
+        self.robonomics_path = self.config["robonomics_path"]
+        self.suri = self.config["suri"]
+        self.remote = self.config["robonomics_remote"]
+        #self.interval = 30
 
         self.todatalog = {
             "actions": [],
@@ -60,6 +66,7 @@ class RWSNode:
             "line": 0
         }
 
+        rospy.loginfo("Ready!")
 
     def add_entry(self, entry: Entry):
         row = copy.deepcopy(self.emptyentry)
@@ -73,10 +80,36 @@ class RWSNode:
 
         self.todatalog["actions"].append(row)
 
-    def publish_file_to_ipfs(self, path: str) -> str:
+    def publish_file_to_ipfs(self, path: str, mode: str = "rb") -> str:
         res = self.pinata.pin_file_to_ipfs(path)
+        try:
+            self.pin_to_temporal(path, mode=mode)
+        except Exception as e:
+            rospy.logerr(e)
+        self.pin_local_ipfs(path)
         rospy.loginfo(res)
         return res["IpfsHash"]
+
+    def pin_to_temporal(self, path: str, mode: str = "rb"):
+        username = self.config["temporal_username"]
+        password = self.config["temporal_password"]
+        if username and password:
+            auth_url = "https://api.temporal.cloud/v2/auth/login"
+            token_resp = requests.post(auth_url, json={"username": username, "password": password})
+            token = token_resp.json()
+
+            url_add = "https://api.temporal.cloud/v2/ipfs/public/file/add"
+            headers = {"Authorization": f"Bearer {token['token']}"}
+            rospy.loginfo(path)
+            resp = requests.post(url_add, files={"file":open(path, mode=mode), "hold_time":(None,1)}, headers=headers)
+
+            if resp.status_code == 200:
+                rospy.loginfo("File pinned to Temporal Cloud")
+
+    def pin_local_ipfs(self, path: str):
+        with ipfshttpclient.connect("/ip4/127.0.0.1/tcp/5001/http") as client:
+            response = client.add(path)
+            rospy.loginfo("Local IPFS pin: {}".format(response["Hash"]))
 
     def add_log(self, log: Log):
         if log.name != "/rws_datalog/agent":
@@ -104,28 +137,31 @@ class RWSNode:
 
     def spin(self):
         def call_datalog():
-            rospy.loginfo("Publish to datalog")
+            #rospy.loginfo("Publish to datalog")
             if len(self.todatalog["actions"]) > 0 or len(self.todatalog["logs"]) > 0:
                 rospy.loginfo(self.todatalog)
                 path = self.save_json(self.todatalog)
-                ipfshash = self.publish_file_to_ipfs(path)
+                ipfshash = self.publish_file_to_ipfs(path, mode="r")
 
                 prog_path = [self.robonomics_path, "io", "write", "datalog",
                      "-s", self.suri, "--remote", self.remote]
                 output = subprocess.run(prog_path, stdout=subprocess.PIPE, input=ipfshash.encode(),
                            stderr=subprocess.PIPE)
 
-                rospy.loginfo(output.stderr)
-                rospy.loginfo(output)
+                if output.stderr:
+                    rospy.logerr(output.stderr)
+                else:
+                    rospy.loginfo("Published!")
             else:
-                rospy.loginfo("Nothing to publish")
+                #rospy.loginfo("Nothing to publish")
+                pass
 
             self.todatalog = {
                 "actions": [],
                 "logs": []
             }
 
-            Timer(self.interval, call_datalog).start()
+            Timer(self.config["interval"], call_datalog).start()
 
         call_datalog()
         rospy.spin()

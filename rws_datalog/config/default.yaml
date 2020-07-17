@@ -3,4 +3,6 @@ pinata_secret_api_key: ""
 robonomics_path: ""
 suri: ""
 robonomics_remote: "wss://substrate.ipci.io"
-
+interval: 30
+temporal_username: "" # Temporal.Cloud credentials
+temporal_password: ""

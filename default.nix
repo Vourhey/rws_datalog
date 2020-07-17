@@ -17,6 +17,7 @@ mkRosPackage rec {
     ipfshttpclient
     requests
     pinatapy
+    pyyaml
   ];
 
   meta = with stdenv.lib; {
